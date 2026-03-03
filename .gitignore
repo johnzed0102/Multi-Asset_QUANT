@@ -1,0 +1,9 @@
+.DS_Store
+.AppleDouble
+.LSOverride
+
+prompt/
+
+*.log
+node_modules/
+.venv/
