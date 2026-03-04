@@ -5,6 +5,9 @@
 prompt/
 Script.qmd
 工作流.qmd
+*.pptx
+多资产量化配置策略构建与绩效评估.pdf
+
 
 *.log
 node_modules/
