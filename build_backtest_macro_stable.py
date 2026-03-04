@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 
-ROOT_DIR = Path("/Users/john/Desktop/模拟盘课题")
+ROOT_DIR = Path("/Users/john/Desktop/Multi-Asset_QUANT")
 RETURNS_PATH = ROOT_DIR / "processed_data/asset_return_panel.csv"
 MACRO_PATH = ROOT_DIR / "processed_data/macro_panel.csv"
 OUTPUT_DIR = ROOT_DIR / "回测引擎_macro_stable"

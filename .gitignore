@@ -3,6 +3,8 @@
 .LSOverride
 
 prompt/
+Script.qmd
+工作流.qmd
 
 *.log
 node_modules/

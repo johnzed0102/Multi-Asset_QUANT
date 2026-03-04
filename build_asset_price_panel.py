@@ -3,8 +3,8 @@ from pathlib import Path
 import pandas as pd
 
 
-RAW_DIR = Path("/Users/john/Desktop/模拟盘课题/raw_data")
-PROCESSED_DIR = Path("/Users/john/Desktop/模拟盘课题/processed_data")
+RAW_DIR = Path("/Users/john/Desktop/Multi-Asset_QUANT/raw_data")
+PROCESSED_DIR = Path("/Users/john/Desktop/Multi-Asset_QUANT/processed_data")
 OUTPUT_PATH = PROCESSED_DIR / "asset_price_panel.csv"
 
 

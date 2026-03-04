@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 
-PROCESSED_DIR = Path("/Users/john/Desktop/模拟盘课题/processed_data")
+PROCESSED_DIR = Path("/Users/john/Desktop/Multi-Asset_QUANT/processed_data")
 PRICE_PATH = PROCESSED_DIR / "asset_price_panel.csv"
 RETURN_PATH = PROCESSED_DIR / "asset_return_panel.csv"
 ASSET_COLUMNS = ["hs300", "sp500", "cgb10y", "gold", "policy_bond", "credit_bond"]

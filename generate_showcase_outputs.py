@@ -5,7 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 
-ROOT_DIR = Path("/Users/john/Desktop/模拟盘课题")
+ROOT_DIR = Path("/Users/john/Desktop/Multi-Asset_QUANT")
 
 SHOWCASE_DIR = ROOT_DIR / "showcase_output"
 TABLES_DIR = SHOWCASE_DIR / "tables"
@@ -163,6 +163,189 @@ def compute_rolling_vol(nav_df: pd.DataFrame, window: int = 252) -> pd.Series:
 	vol = ret.rolling(window).std(ddof=0) * np.sqrt(252)
 	vol.index = nav_df[DATE_COL]
 	return vol
+
+
+def select_nav_column(nav_df: pd.DataFrame, description: str) -> str:
+	if "nav" in nav_df.columns:
+		return "nav"
+	if "NAV" in nav_df.columns:
+		return "NAV"
+	numeric_cols = []
+	for col in nav_df.columns:
+		if col == DATE_COL:
+			continue
+		coerced = pd.to_numeric(nav_df[col], errors="coerce")
+		if coerced.notna().any():
+			numeric_cols.append(col)
+	if len(numeric_cols) == 1:
+		return numeric_cols[0]
+	raise ValueError(f"{description} 无法自动识别 NAV 列；请确保存在 nav/NAV 或唯一数值列")
+
+
+def extract_nav_series(nav_df: pd.DataFrame, description: str) -> pd.Series:
+	nav_col = select_nav_column(nav_df, description)
+	series = pd.to_numeric(nav_df[nav_col], errors="coerce")
+	series.index = nav_df[DATE_COL]
+	series = series.sort_index()
+	return series
+
+
+def compute_yearly_return_and_maxdd(nav_series: pd.Series) -> pd.DataFrame:
+	if nav_series.empty:
+		return pd.DataFrame(columns=["return", "maxdd"])
+
+	clean = nav_series.dropna().sort_index()
+	if clean.empty:
+		return pd.DataFrame(columns=["return", "maxdd"])
+
+	rows: list[dict[str, float | int]] = []
+	for year, group in clean.groupby(clean.index.year):
+		group = group.dropna().sort_index()
+		if group.empty:
+			continue
+
+		nav_start = float(group.iloc[0])
+		nav_end = float(group.iloc[-1])
+		year_return = nav_end / nav_start - 1.0 if nav_start != 0 else np.nan
+
+		if len(group) <= 1:
+			year_maxdd = 0.0
+		else:
+			running_peak = group.cummax()
+			dd = group / running_peak - 1.0
+			year_maxdd = float(dd.min()) if not dd.empty else 0.0
+
+		rows.append({"year": int(year), "return": year_return, "maxdd": year_maxdd})
+
+	if not rows:
+		return pd.DataFrame(columns=["return", "maxdd"])
+
+	out_df = pd.DataFrame(rows).set_index("year").sort_index()
+	return out_df
+
+
+def pick_winner(value_a: float, value_b: float, name_a: str, name_b: str, larger_is_better: bool) -> str | float:
+	a_valid = pd.notna(value_a)
+	b_valid = pd.notna(value_b)
+	if not a_valid and not b_valid:
+		return np.nan
+	if a_valid and not b_valid:
+		return name_a
+	if b_valid and not a_valid:
+		return name_b
+
+	if larger_is_better:
+		return name_a if value_a >= value_b else name_b
+	return name_a if value_a <= value_b else name_b
+
+
+def save_perf_by_year_table_png(perf_by_year_df: pd.DataFrame, output_path: Path) -> None:
+	display_cols = [
+		"year",
+		"baseline_return",
+		"baseline_maxdd",
+		"macro_stable_return",
+		"macro_stable_maxdd",
+		"excess_return",
+		"maxdd_improve",
+		"winner_return",
+		"winner_maxdd",
+	]
+	display_df = perf_by_year_df[display_cols].copy()
+
+	for col in [
+		"baseline_return",
+		"baseline_maxdd",
+		"macro_stable_return",
+		"macro_stable_maxdd",
+		"excess_return",
+		"maxdd_improve",
+	]:
+		display_df[col] = display_df[col].apply(lambda v: "NA" if pd.isna(v) else f"{float(v):.1%}")
+
+	display_df["year"] = display_df["year"].astype(int).astype(str)
+	display_df["winner_return"] = display_df["winner_return"].fillna("NA")
+	display_df["winner_maxdd"] = display_df["winner_maxdd"].fillna("NA")
+
+	fig, ax = plt.subplots(figsize=(16, 9))
+	ax.axis("off")
+	table = ax.table(
+		cellText=display_df.values,
+		colLabels=display_df.columns,
+		loc="center",
+		cellLoc="center",
+	)
+	table.auto_set_font_size(False)
+	table.set_fontsize(10)
+	table.scale(1.05, 1.6)
+
+	for (row, _col), cell in table.get_celld().items():
+		if row == 0:
+			cell.set_text_props(weight="bold")
+			cell.set_facecolor("#F2F2F2")
+		else:
+			cell.set_facecolor("#FFFFFF" if row % 2 else "#FAFAFA")
+
+	ax.set_title("Yearly Performance: Baseline vs Macro Stable", fontsize=16, fontweight="bold", pad=18)
+	fig.tight_layout()
+	fig.savefig(output_path, dpi=220, facecolor="white")
+	plt.close(fig)
+	log(f"生成图表: {output_path}")
+
+
+def build_perf_by_year_table(
+	baseline_nav_df: pd.DataFrame,
+	macro_nav_df: pd.DataFrame,
+	output_csv_path: Path,
+	output_png_path: Path | None = None,
+) -> pd.DataFrame:
+	baseline_yearly = compute_yearly_return_and_maxdd(extract_nav_series(baseline_nav_df, "baseline nav"))
+	macro_yearly = compute_yearly_return_and_maxdd(extract_nav_series(macro_nav_df, "macro_stable nav"))
+
+	years = sorted(set(baseline_yearly.index).union(set(macro_yearly.index)))
+	perf_by_year = pd.DataFrame({"year": years})
+	perf_by_year = perf_by_year.set_index("year")
+
+	perf_by_year["baseline_return"] = baseline_yearly["return"]
+	perf_by_year["baseline_maxdd"] = baseline_yearly["maxdd"]
+	perf_by_year["macro_stable_return"] = macro_yearly["return"]
+	perf_by_year["macro_stable_maxdd"] = macro_yearly["maxdd"]
+
+	perf_by_year["excess_return"] = perf_by_year["macro_stable_return"] - perf_by_year["baseline_return"]
+	perf_by_year["maxdd_improve"] = perf_by_year["macro_stable_maxdd"] - perf_by_year["baseline_maxdd"]
+
+	perf_by_year["winner_return"] = perf_by_year.apply(
+		lambda row: pick_winner(
+			row["baseline_return"],
+			row["macro_stable_return"],
+			"baseline",
+			"macro_stable",
+			larger_is_better=True,
+		),
+		axis=1,
+	)
+	perf_by_year["winner_maxdd"] = perf_by_year.apply(
+		lambda row: pick_winner(
+			row["baseline_maxdd"],
+			row["macro_stable_maxdd"],
+			"baseline",
+			"macro_stable",
+			larger_is_better=True,
+		),
+		axis=1,
+	)
+
+	perf_by_year = perf_by_year.reset_index()
+	perf_by_year["year"] = perf_by_year["year"].astype(int)
+	perf_by_year = perf_by_year.sort_values("year").reset_index(drop=True)
+
+	perf_by_year.to_csv(output_csv_path, index=False)
+	log(f"生成表格: {output_csv_path}")
+
+	if output_png_path is not None:
+		save_perf_by_year_table_png(perf_by_year, output_png_path)
+
+	return perf_by_year
 
 
 def setup_plot() -> None:
@@ -361,6 +544,15 @@ def main() -> None:
 	turnover_df.to_csv(turnover_path)
 	log(f"生成表格: {turnover_path}")
 
+	perf_by_year_path = TABLES_DIR / "perf_by_year.csv"
+	perf_by_year_png_path = FIGURES_DIR / "perf_by_year.png"
+	build_perf_by_year_table(
+		baseline_nav_df=baseline_nav,
+		macro_nav_df=macro_nav,
+		output_csv_path=perf_by_year_path,
+		output_png_path=perf_by_year_png_path,
+	)
+
 	baseline_nav_norm = normalize_nav(baseline_nav)
 	macro_nav_norm = normalize_nav(macro_nav)
 
@@ -416,6 +608,7 @@ def main() -> None:
 	generated_files = [
 		perf_path,
 		turnover_path,
+		perf_by_year_path,
 		FIGURES_DIR / "nav_comparison.png",
 		FIGURES_DIR / "drawdown_comparison.png",
 		FIGURES_DIR / "rolling_vol_252.png",
@@ -423,6 +616,7 @@ def main() -> None:
 		FIGURES_DIR / "allocation_area_macro_stable.png",
 		FIGURES_DIR / "turnover_timeseries.png",
 		FIGURES_DIR / "cash_weight_comparison.png",
+		perf_by_year_png_path,
 		SUMMARY_PATH,
 	]
 	log("生成完成，文件列表:")

@@ -5,8 +5,8 @@ import pandas as pd
 from scipy.optimize import minimize
 
 
-DATA_PATH = Path("/Users/john/Desktop/模拟盘课题/processed_data/asset_return_panel.csv")
-OUTPUT_DIR = Path("/Users/john/Desktop/模拟盘课题/回测引擎")
+DATA_PATH = Path("/Users/john/Desktop/Multi-Asset_QUANT/processed_data/asset_return_panel.csv")
+OUTPUT_DIR = Path("/Users/john/Desktop/Multi-Asset_QUANT/回测引擎")
 
 ASSETS = ["hs300", "sp500", "cgb10y", "gold", "policy_bond", "credit_bond"]
 WINDOW = 252
